@@ -1,0 +1,146 @@
+---
+title: "genie_music"
+author: "jieun"
+date: '2020 8 31 '
+output: html_document
+---
+### 지니뮤직 top200차트(18.07 ~ 20.07) 데이터
+```{r}
+genie<-read.csv(file = 'jenie_top200_data_ANSI.csv')
+str(genie)
+
+```
+
+```{r}
+genie[,7:8] <- lapply(genie[,7:8],function(genie){as.numeric(gsub(",", "", genie))})
+genie$날짜<-as.Date(genie$날짜)
+
+str(genie)
+```
+
+```{r message=FALSE}
+library(tidyverse)
+
+genie2018<-genie %>% filter(str_starts(날짜,'2018'))
+head(genie2018 %>% group_by(장르) %>% summarise(count=n()) %>% arrange(-count))
+
+genie2019<-genie %>% filter(str_starts(날짜,'2019'))
+head(genie2019 %>% group_by(장르) %>% summarise(count=n()) %>% arrange(-count))
+
+genie2020<-genie %>% filter(str_starts(날짜,'2020'))
+head(genie2020 %>% group_by(장르) %>% summarise(count=n()) %>% arrange(-count))
+
+a<-genie2018 %>% filter(장르 %in% c('가요 / 댄스','가요 / 발라드','OST / 드라마',
+                                  '가요 / 랩/힙합','POP / 팝')) %>% mutate(year=2018)
+b<-genie2019 %>% filter(장르 %in% c('가요 / 댄스','가요 / 발라드','OST / 드라마',
+                                  '가요 / 랩/힙합','POP / 팝')) %>% mutate(year=2019)
+c<-genie2020 %>% filter(장르 %in% c('가요 / 댄스','가요 / 발라드','OST / 드라마',
+                                  '가요 / 랩/힙합','POP / 팝')) %>% mutate(year=2020)
+t<-rbind(a,b,c)
+t$year<-factor(t$year)
+
+t_year<- t %>% group_by(year,장르) %>% summarise(재생수=sum(전체재생수))
+head(t_year)
+```
+
+```{r}
+
+install.packages("wesanderson",repos="http://cran.us.r-project.org")
+library(wesanderson)
+
+ggplot(t_year)+geom_col(aes(x=year,y=재생수,fill=장르),position='dodge')+
+  scale_fill_manual(values=wes_palette(n=5, name="Royal2"))+
+  labs(title = '장르별 스트리밍 수',y='재생수(억)')+
+  theme(plot.title = element_text(size = 25,face = 'bold',hjust = 0.5),
+        axis.title.y=element_text(angle = 0,vjust = 0.5))+
+  scale_y_continuous(labels = c("0",'400','800','1200'))+
+  theme_bw()
+
+```
+
+
+
+```{r}
+words<-genie %>% group_by(아티스트) %>% summarise(count=n()) %>% arrange(-count)
+head(words)
+
+song<-genie %>% group_by(곡명) %>% summarise(count=n()) %>% arrange(-count)
+head(song)
+
+```
+
+```{r}
+install.packages('wordcloud',repos="http://cran.us.r-project.org")
+
+
+library(RColorBrewer)
+library(wordcloud)
+
+windowsFonts(baedal=windowsFont("배달의민족 주아"))
+
+pal <- brewer.pal(11,"Spectral")
+pal<- pal[c(3,4,8,9,10,11)]
+wordcloud(words$아티스트, words$count, 
+          scale=c(4,0.3), min.freq=50, random.order=F, 
+          rot.per=.1, colors=pal, family="baedal")
+
+
+
+pal2 <- brewer.pal(9, "Spectral")
+wordcloud(song$곡명, song$count, 
+          scale=c(1.0,0.005), min.freq=70, random.order=F, 
+          rot.per=.1, colors=pal2, family="baedal")
+
+```
+
+```{r}
+
+install.packages('dygraphs',repos="http://cran.us.r-project.org")
+
+library(xts)
+library(dygraphs)
+
+D<-genie %>% group_by(날짜,장르) %>% summarise(재생수=sum(전체재생수))
+D_댄스<-D %>% filter(장르=='가요 / 댄스')
+D_발라드<-D %>% filter(장르=='가요 / 발라드')
+D_힙합<-D %>% filter(장르=='가요 / 랩/힙합')
+D_OST<-D %>% filter(장르=='OST / 드라마')
+D_POP<-D %>% filter(장르=='POP / 팝')
+
+
+D_댄스<-xts(x=D_댄스$재생수, order.by=D_댄스$날짜)
+D_발라드<-xts(x=D_발라드$재생수, order.by=D_발라드$날짜)
+D_힙합<-xts(x=D_힙합$재생수, order.by=D_힙합$날짜)
+D_OST<-xts(x=D_OST$재생수, order.by=D_OST$날짜)
+D_POP<-xts(x=D_POP$재생수, order.by=D_POP$날짜)
+
+
+d<-cbind(댄스=D_댄스,발라드=D_발라드,힙합=D_힙합,OST=D_OST,POP=D_POP)
+dygraph(d)
+```
+
+
+### 우리나라 코로나 확진자 수 데이터
+``` {r}
+covid<-read.csv(file = 'covid_week.csv')
+str(covid)
+
+covid$cumsum<-cumsum(covid$count)
+str(covid)
+
+top10<-genie %>% filter(순위 %in% 1:10)
+t<-top10 %>% group_by(날짜) %>% summarise(전체재생수=sum(전체재생수))
+
+g<-ggplot(t)+geom_line(aes(x=날짜,y=전체재생수,color='전체재생수'),color='darkgreen')
+
+covid$week<-as.Date(covid$week)
+g1<-g+geom_line(data = covid,aes(x=week,y=cumsum*50000,color='cumsum*50000'),color='red')
+
+g2<-g1+scale_y_continuous(sec.axis = sec_axis(~./50000, name = '코로나확진자수'))+
+  scale_color_discrete(name = "color", labels = c("코로나확진자수", "전체재생수"))+
+  theme_light()+
+  theme(axis.line.y.right = element_line(colour = 'red'),
+        axis.line.y.left = element_line(colour = 'darkgreen'))
+g2
+
+```
